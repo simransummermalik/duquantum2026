@@ -8,7 +8,7 @@ diagnostics.
 ## Idle — current look
 
 <p align="center">
-  <img src="assets/watchcat.svg" alt="Watchcat in its idle detective look" width="320" />
+  <img src="assets/watchcat-idle.gif" alt="Watchcat animated idle detective look" width="320" />
 </p>
 
 The idle look is Watchcat calmly investigating with its magnifying glass. The
@@ -35,6 +35,6 @@ result.
 
 ## Implementation status
 
-- **Idle animation:** designed and implemented in the supplied HTML file.
+- **Idle animation:** designed and implemented in the supplied HTML file and exported as [`assets/watchcat-idle.gif`](assets/watchcat-idle.gif) for Markdown previews.
 - **Static README artwork:** available at [`assets/watchcat.svg`](assets/watchcat.svg).
 - **Simulation-driven expressions:** next integration step for the Watchcat UI.
