@@ -1,0 +1,57 @@
+# Task 1.0 (b) Pure two-photon loss.
+
+import dynamiqs as dq
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+
+dq.set_precision("double")
+
+# Fock space dimension
+Na = 30
+a = dq.destroy(Na)
+n_op = a.dag() @ a
+
+# Given parameters
+g2 = 2 * jnp.pi * 0.763
+kappa_b = 2 * jnp.pi * 9.3e-3
+
+# Effective two-photon loss rate
+kappa2 = 4 * g2**2 / kappa_b
+
+# Zero Hamiltonian
+H = 0.0 * n_op
+
+# Jump operator for two-photon loss
+jump_ops = [jnp.sqrt(kappa2) * (a @ a)]
+
+# Same initial coherent state
+alpha0 = 2.0
+psi0 = dq.coherent(Na, alpha0)
+
+# Time evolution
+tsave = jnp.linspace(0.0, 2e-3, 101)
+
+res = dq.mesolve(
+    H,
+    jump_ops,
+    psi0,
+    tsave,
+    exp_ops=[n_op],
+    progress_meter=False,
+)
+
+# Mean photon number
+n_num = jnp.real(res.expects[0])
+
+# Plot
+plt.figure(figsize=(8, 5))
+plt.plot(tsave, n_num, linewidth=2)
+plt.axhline(0.5, color="red", linestyle="--",
+            label="Reference: 0.5")
+plt.xlabel("Time")
+plt.ylabel(r"$\langle a^\dagger a\rangle$")
+plt.title("Two-photon loss")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
