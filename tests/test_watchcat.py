@@ -1,7 +1,7 @@
 import unittest
 
 from qpet.demo import fake_run
-from qpet.watchcat import analyze_run, compare_runs, recommend_run
+from qpet.watchcat import analyze_convergence, analyze_run, compare_runs, recommend_run
 
 
 class WatchcatTests(unittest.TestCase):
@@ -32,6 +32,32 @@ class WatchcatTests(unittest.TestCase):
         )
         self.assertEqual(selected.label, "good")
         self.assertEqual(len(comparisons), 2)
+
+    def test_convergence_report_celebrates_validated_savings(self):
+        reference = fake_run("reference", 48, 12, error=0.00001, runtime=4.0)
+        candidates = [
+            fake_run("bad", 16, 4, error=0.2, runtime=0.3),
+            fake_run("good", 24, 8, error=0.0002, runtime=0.8),
+        ]
+        report = analyze_convergence(
+            candidates,
+            reference,
+            observables=["n_memory", "n_buffer"],
+        )
+        self.assertEqual(report.pet_state, "celebrating")
+        self.assertEqual(report.status, "validated_optimization")
+        self.assertEqual(report.metrics["selected_label"], "good")
+        self.assertEqual(len(report.comparisons), 2)
+
+    def test_convergence_report_warns_when_every_candidate_touches_boundary(self):
+        reference = fake_run("reference", 48, 12, error=0.00001, runtime=4.0)
+        report = analyze_convergence(
+            [fake_run("bad", 16, 4, error=0.2, runtime=0.3)],
+            reference,
+            observables=["n_memory", "n_buffer"],
+        )
+        self.assertEqual(report.pet_state, "worried")
+        self.assertTrue(any(item.code == "NO_VALIDATED_CONFIGURATION" for item in report.diagnostics))
 
 
 if __name__ == "__main__":

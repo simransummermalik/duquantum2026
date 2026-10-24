@@ -6,3 +6,4 @@ build/
 dist/
 *.egg-info/
 qpet_demo_report.json
+watchcat_report.json

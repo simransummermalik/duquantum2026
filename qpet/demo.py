@@ -1,4 +1,4 @@
-"""Dependency-free demo of the Watchcat contract.
+"""Dependency-free demo of the Watchcat report and dashboard contract.
 
 This is a UI/integration smoke test, not a substitute for Dynamiqs. The next
 adapter will turn real Dynamiqs states into the same SimulationRun object.
@@ -6,12 +6,12 @@ adapter will turn real Dynamiqs states into the same SimulationRun object.
 
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 
 from .models import SimulationConfig, SimulationRun
-from .watchcat import analyze_run, recommend_run
+from .pipeline import make_report_payload, write_report
+from .watchcat import analyze_convergence
 
 
 def fake_run(label: str, Na: int, Nb: int, *, error: float, runtime: float) -> SimulationRun:
@@ -41,21 +41,23 @@ def main() -> None:
         fake_run("candidate-16x4", 16, 4, error=0.2, runtime=0.3),
         fake_run("candidate-24x8", 24, 8, error=0.0002, runtime=0.8),
     ]
-    selected, comparisons = recommend_run(
+    report = analyze_convergence(
         candidates,
         reference,
         observables=["n_memory", "n_buffer"],
         abs_tolerance=0.001,
         relative_tolerance=0.01,
     )
-    report = analyze_run(candidates[0])
-    payload = report.to_dict()
-    payload["selected_run"] = selected.label if selected else None
-    payload["comparisons"] = [comparison.__dict__ for comparison in comparisons]
-    output = Path("qpet_demo_report.json")
-    output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    payload = make_report_payload(
+        report,
+        [reference, *candidates],
+        source="synthetic_demo",
+        model="synthetic_cat_qubit_trajectory",
+        extra={"warning": "Synthetic trajectories only; not a physics result."},
+    )
+    output = write_report(payload, Path("watchcat_report.json"))
     print(report.to_json())
-    print(f"Selected configuration: {selected.label if selected else 'none'}")
+    print(f"Selected configuration: {report.metrics.get('selected_label') or 'none'}")
     print(f"Wrote {output}")
 
 

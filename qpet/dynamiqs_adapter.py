@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Any, Sequence
+import time
+from typing import Any, Iterable, Sequence
 
 from .models import SimulationConfig, SimulationRun
 
@@ -73,19 +74,27 @@ def build_full_two_mode_model(
     identity_b = dq.eye(Nb)
     n_memory = a.dag() @ a
     n_buffer = b.dag() @ b
+    memory_parity = dq.tensor(dq.parity(Na), identity_b)
+    # ``dq.destroy(Na, Nb)`` already returns operators embedded in the full
+    # two-mode Hilbert space.  Tensoring ``a`` again would accidentally create
+    # an extra buffer mode (and a 3-mode observable), which Dynamiqs cannot
+    # evaluate against the two-mode state.
+    memory_amplitude_real = (a + a.dag()) / 2
     edge_memory = dq.tensor(
         dq.fock_dm(Na, Na - 1) + dq.fock_dm(Na, Na - 2),
         identity_b,
     )
     edge_buffer = dq.tensor(identity_a, dq.fock_dm(Nb, Nb - 1))
     trace = dq.tensor(identity_a, identity_b)
-    exp_ops = [n_memory, n_buffer, edge_memory, edge_buffer, trace]
+    exp_ops = [n_memory, n_buffer, edge_memory, edge_buffer, trace, memory_parity, memory_amplitude_real]
     names = (
         "n_memory",
         "n_buffer",
         "memory_edge_population",
         "buffer_edge_population",
         "trace",
+        "memory_parity",
+        "memory_amplitude_real",
     )
     config = SimulationConfig(
         Na=Na,
@@ -158,6 +167,53 @@ def run_model(dq: Any, model: DynamiqsModel, tsave: Any, *, method: Any = None) 
     if method is not None:
         kwargs["method"] = method
     return dq.mesolve(model.H, list(model.jump_ops), model.psi0, tsave, **kwargs)
+
+
+def run_model_to_run(
+    dq: Any,
+    model: DynamiqsModel,
+    tsave: Any,
+    *,
+    method: Any = None,
+    label: str | None = None,
+) -> SimulationRun:
+    """Run one model and convert it into the serializable Watchcat contract."""
+
+    started = time.perf_counter()
+    result = run_model(dq, model, tsave, method=method)
+    runtime = time.perf_counter() - started
+    return result_to_run(
+        result,
+        model,
+        label=label or f"Na{model.config.Na}-Nb{model.config.Nb}",
+        runtime_seconds=runtime,
+    )
+
+
+def run_truncation_sweep(
+    dq: Any,
+    jnp: Any,
+    tsave: Any,
+    truncations: Iterable[tuple[int, int]],
+    *,
+    params: CatParameters | None = None,
+    method: Any = None,
+) -> tuple[tuple[SimulationRun, ...], SimulationRun]:
+    """Run a convergence sweep and return all runs plus the reference run.
+
+    The reference is the largest requested memory-buffer space. Its result is
+    deliberately still passed through Watchcat rather than treated as exact.
+    """
+
+    requested = sorted(set((int(Na), int(Nb)) for Na, Nb in truncations))
+    if not requested:
+        raise ValueError("At least one truncation pair is required")
+    runs: list[SimulationRun] = []
+    for Na, Nb in requested:
+        model = build_full_two_mode_model(dq, jnp, Na=Na, Nb=Nb, params=params)
+        runs.append(run_model_to_run(dq, model, tsave, method=method))
+    reference = max(runs, key=lambda run: (run.config.Na * run.config.Nb, run.config.Na, run.config.Nb))
+    return tuple(runs), reference
 
 
 def result_to_run(

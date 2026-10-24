@@ -9,5 +9,8 @@ description = "Numerical Watchcat for dissipative bosonic quantum simulations"
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+physics = ["dynamiqs>=0.3.7"]
+
 [tool.setuptools.packages.find]
 include = ["qpet*"]

@@ -33,7 +33,9 @@ The first vertical slice is dependency-free and includes:
 - edge-population, trace, precision, and photon-number diagnostics;
 - observable-aware convergence comparisons;
 - measured-runtime-aware configuration recommendations;
-- a demo report and unit tests.
+- an evidence-backed convergence report;
+- a Watchcat dashboard that maps report states to the six cat animations;
+- a synthetic demo report and unit tests.
 
 The demo uses synthetic trajectories only to test the Watchcat contract. It is
 not a physics result. A Dynamiqs adapter for the Alice & Bob cat-qubit model is
@@ -44,15 +46,48 @@ included, but executing it requires Dynamiqs/JAX to be installed.
 ```bash
 python3 -m unittest discover -s tests -v
 python3 -m qpet.demo
+python3 -m qpet.server
 ```
 
-The generated `qpet_demo_report.json` is a local artifact and is ignored by
-Git.
+Then open `http://127.0.0.1:8000/`. The generated `watchcat_report.json` is a
+local artifact and is ignored by Git. The demo is synthetic and is not a
+physics result.
 
-## Planned layers
+## Run the real Alice & Bob sweep
 
-1. Run and validate the Dynamiqs adapter on the Alice & Bob Introductory Track.
-2. Wigner, parity, fidelity, purity, and partial-trace diagnostics.
-3. VS Code pet panel consuming Watchcat JSON artifacts.
-4. Optional sponsor integrations: Gemini explanations, Backboard memory,
+Install the optional physics dependencies once:
+
+```bash
+python3 -m pip install -e ".[physics]"
+```
+
+Then run:
+
+```bash
+python3 -m qpet.run_sweep
+python3 -m qpet.server
+```
+
+This runs the full two-mode memory-buffer model over several `(Na, Nb)`
+truncations, compares memory and buffer observables, checks boundary
+populations, and writes the report consumed by the dashboard.
+
+The default sweep uses the challenge's provided parameters, double precision,
+`0 <= t <= 2` microseconds, and the truncations
+`16x4, 20x6, 24x8, 32x10, 48x12`. Override them for a faster smoke test, for
+example:
+
+```bash
+python3 -m qpet.run_sweep --duration 0.2 --samples 5 --truncations 8x3,10x4
+```
+
+Watchcat is deliberately conservative: if the reference itself reaches the
+top Fock levels, it reports **worried** and recommends increasing the Hilbert
+space instead of claiming a false compute saving.
+
+## Next research extensions
+
+1. Wigner snapshots and full Task 1.3 logical-state fidelity/purity analysis.
+2. VS Code pet panel consuming the same Watchcat JSON contract.
+3. Optional sponsor integrations: Gemini explanations, Backboard memory,
    Tiger Data experiment history, remote Vultr sweeps, and ElevenLabs voice.

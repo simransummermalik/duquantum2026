@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from typing import Iterable, Sequence
 
 from .models import (
@@ -100,9 +101,9 @@ def analyze_run(
         metrics["memory_photon_peak"] = _max(values)
         metrics["memory_photon_final"] = _last(values)
         if len(values) > 1 and values[-1] > values[0] * 1.25:
-            pet_state = "inflating"
+            pet_state = "watching"
         else:
-            pet_state = "sleeping"
+            pet_state = "idle"
     else:
         pet_state = "watching"
 
@@ -110,7 +111,7 @@ def analyze_run(
         pet_state = "worried"
         status = "needs_review" if not any(item.severity == "error" for item in diagnostics) else "invalid"
     else:
-        pet_state = "calm" if pet_state != "inflating" else pet_state
+        pet_state = pet_state
         status = "observed"
 
     return WatchcatReport(
@@ -119,6 +120,113 @@ def analyze_run(
         status=status,
         diagnostics=tuple(diagnostics),
         metrics=metrics,
+    )
+
+
+def analyze_convergence(
+    candidates: Sequence[SimulationRun],
+    reference: SimulationRun,
+    *,
+    observables: Iterable[str],
+    abs_tolerance: float = 1e-3,
+    relative_tolerance: float = 1e-2,
+    edge_tolerance: float = 1e-3,
+    trace_tolerance: float = 1e-8,
+) -> WatchcatReport:
+    """Build the evidence-backed report that drives the Watchcat UI.
+
+    A candidate must pass both the convergence comparison and the standalone
+    numerical diagnostics. This prevents a cheaper run from being recommended
+    merely because its selected observables look close while its population is
+    reaching the Fock-space boundary.
+    """
+
+    comparisons: list[ConvergenceComparison] = []
+    clean_labels: set[str] = set()
+    for run in candidates:
+        comparison = compare_runs(
+            run,
+            reference,
+            observables=observables,
+            abs_tolerance=abs_tolerance,
+            relative_tolerance=relative_tolerance,
+        )
+        comparisons.append(comparison)
+        run_report = analyze_run(
+            run,
+            edge_tolerance=edge_tolerance,
+            trace_tolerance=trace_tolerance,
+        )
+        if not any(item.severity in {"warning", "error"} for item in run_report.diagnostics):
+            clean_labels.add(run.label)
+
+    passing = [
+        run
+        for run, comparison in zip(candidates, comparisons)
+        if comparison.passed and run.label in clean_labels
+    ]
+
+    def cost(run: SimulationRun) -> tuple[float, float]:
+        measured = run.runtime_seconds if run.runtime_seconds is not None else math.inf
+        proxy = float((run.config.Na * run.config.Nb) ** 2)
+        return (measured if math.isfinite(measured) else proxy, proxy)
+
+    selected = min(passing, key=cost) if passing else None
+    base = analyze_run(
+        selected or reference,
+        edge_tolerance=edge_tolerance,
+        trace_tolerance=trace_tolerance,
+    )
+    metrics = dict(base.metrics)
+    metrics.update(
+        {
+            "reference_label": reference.label,
+            "reference_Na": reference.config.Na,
+            "reference_Nb": reference.config.Nb,
+            "candidate_count": len(candidates),
+            "passing_count": len(passing),
+            "selected_label": selected.label if selected else None,
+            "selected_Na": selected.config.Na if selected else None,
+            "selected_Nb": selected.config.Nb if selected else None,
+            "abs_tolerance": abs_tolerance,
+            "relative_tolerance": relative_tolerance,
+        }
+    )
+
+    diagnostics = list(base.diagnostics)
+    if selected is None:
+        diagnostics.append(
+            Diagnostic(
+                code="NO_VALIDATED_CONFIGURATION",
+                severity="error",
+                message="No candidate truncation passed both convergence and boundary checks.",
+                evidence={
+                    "candidate_count": len(candidates),
+                    "passing_convergence_count": sum(item.passed for item in comparisons),
+                },
+                recommendation="Increase Na or Nb and rerun the convergence study.",
+            )
+        )
+        pet_state = "worried"
+        status = "needs_review"
+    elif diagnostics:
+        pet_state = "worried"
+        status = "needs_review"
+    elif selected.config.Na < reference.config.Na or selected.config.Nb < reference.config.Nb:
+        pet_state = "celebrating"
+        status = "validated_optimization"
+    else:
+        pet_state = "happy"
+        status = "validated"
+
+    return replace(
+        base,
+        run_label=selected.label if selected else reference.label,
+        pet_state=pet_state,
+        status=status,
+        diagnostics=tuple(diagnostics),
+        metrics=metrics,
+        comparisons=tuple(comparisons),
     )
 
 

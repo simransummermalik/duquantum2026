@@ -12,7 +12,7 @@ from .models import (
     SimulationRun,
     WatchcatReport,
 )
-from .watchcat import analyze_run, compare_runs, recommend_run
+from .watchcat import analyze_convergence, analyze_run, compare_runs, recommend_run
 from .dynamiqs_adapter import CatParameters
 
 __all__ = [
@@ -22,6 +22,7 @@ __all__ = [
     "SimulationRun",
     "WatchcatReport",
     "analyze_run",
+    "analyze_convergence",
     "compare_runs",
     "recommend_run",
     "CatParameters",

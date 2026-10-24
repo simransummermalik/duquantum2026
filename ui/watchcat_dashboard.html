@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Watchcat Dashboard</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; background: #11151b; color: #f4f7fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; padding: 24px; background: radial-gradient(circle at top, #273549, #11151b 54%); }
+    main { max-width: 1180px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; gap: 20px; align-items: end; margin-bottom: 20px; }
+    h1 { margin: 0 0 6px; font-size: clamp(30px, 5vw, 52px); }
+    p { color: #aeb9c8; }
+    .eyebrow { margin: 0; color: #f4a259; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .status { border: 1px solid #4a586a; border-radius: 999px; padding: 9px 14px; background: #1b2430; color: #dce6f2; font-weight: 700; white-space: nowrap; }
+    .status[data-state="worried"] { border-color: #f0b429; color: #ffd166; }
+    .status[data-state="happy"], .status[data-state="celebrating"] { border-color: #53c785; color: #9af0bb; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, .8fr); gap: 18px; }
+    .card { overflow: hidden; border: 1px solid #354151; border-radius: 18px; background: #0b0e12d9; box-shadow: 0 18px 50px #0005; }
+    .card-title { padding: 16px 18px; border-bottom: 1px solid #293442; }
+    .card-title strong { font-size: 20px; }
+    iframe { display: block; width: 100%; height: min(68vh, 640px); border: 0; background: #fbfbf8; }
+    .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px; }
+    .metric { padding: 12px; border: 1px solid #293442; border-radius: 12px; background: #171e27; }
+    .metric small { display: block; margin-bottom: 5px; color: #8f9caf; }
+    .metric strong { font-size: 20px; }
+    .diagnostics { padding: 0 16px 16px; }
+    .diagnostic { margin-top: 10px; padding: 12px; border-left: 3px solid #f0b429; background: #322a17; }
+    .diagnostic.error { border-color: #f06d6d; background: #351c20; }
+    .diagnostic strong, .diagnostic p { display: block; margin: 0; }
+    .diagnostic p { margin-top: 5px; font-size: 13px; }
+    .empty { padding: 18px; color: #aeb9c8; }
+    @media (max-width: 800px) { body { padding: 14px; } header { align-items: start; flex-direction: column; } .layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div><p class="eyebrow">Alice &amp; Bob · Introductory Track</p><h1>Watchcat</h1><p id="subtitle">Numerical trust advisor for the cat-qubit simulation.</p></div>
+      <div id="status" class="status">Loading report…</div>
+    </header>
+    <section class="layout">
+      <article class="card"><div class="card-title"><strong id="state-name">Watching</strong></div><iframe id="pet" title="Watchcat state" src="watchcat_watching.html"></iframe></article>
+      <aside class="card"><div class="card-title"><strong>Evidence</strong></div><div id="metrics" class="metrics"></div><div id="diagnostics" class="diagnostics"></div></aside>
+    </section>
+  </main>
+  <script>
+    const stateFiles = { idle: "watchcat_idle.html", watching: "watchcat_watching.html", worried: "watchcat_worried.html", happy: "watchcat_happy.html", celebrating: "watchcat_super_excited.html", sleeping: "watchcat_bedtime.html" };
+    const stateLabels = { idle: "Idle", watching: "Watching", worried: "Worried", happy: "Happy", celebrating: "Celebrating", sleeping: "Sleeping" };
+    const fallback = { report: { pet_state: "watching", status: "demo", diagnostics: [], metrics: { Na: "—", Nb: "—", precision: "—" } } };
+    const text = (value) => value === null || value === undefined ? "—" : String(value);
+    const number = (value, digits = 4) => typeof value === "number" ? value.toFixed(digits) : text(value);
+    function render(payload) {
+      const report = payload.report || fallback.report;
+      const state = stateFiles[report.pet_state] ? report.pet_state : "watching";
+      document.getElementById("pet").src = stateFiles[state];
+      document.getElementById("pet").title = `Watchcat ${stateLabels[state]} state`;
+      document.getElementById("state-name").textContent = stateLabels[state];
+      const status = document.getElementById("status");
+      status.textContent = report.status || "observed";
+      status.dataset.state = state;
+      const metrics = report.metrics || {};
+      const fields = [["Memory Na", metrics.Na], ["Buffer Nb", metrics.Nb], ["Memory peak", number(metrics.memory_photon_peak)], ["Trace drift", number(metrics.max_trace_drift, 8)], ["Selected Na", metrics.selected_Na], ["Selected Nb", metrics.selected_Nb]];
+      document.getElementById("metrics").innerHTML = fields.map(([label, value]) => `<div class="metric"><small>${label}</small><strong>${text(value)}</strong></div>`).join("");
+      const diagnostics = report.diagnostics || [];
+      document.getElementById("diagnostics").innerHTML = diagnostics.length ? diagnostics.map(item => `<div class="diagnostic ${item.severity === "error" ? "error" : ""}"><strong>${item.code}</strong><p>${item.message}</p></div>`).join("") : '<div class="empty">No warnings. The displayed result passed the supplied checks.</div>';
+    }
+    fetch("/api/report").then((response) => response.ok ? response.json() : fallback).then(render).catch(() => render(fallback));
+  </script>
+</body>
+</html>
