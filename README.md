@@ -9,6 +9,10 @@ to the evidence.
 
 ## Meet Watchcat
 
+<p align="center">
+  <img src="assets/watchcat.svg" alt="Watchcat, the pixel-art detective cat" width="320" />
+</p>
+
 Watchcat combines a friendly virtual pet with a serious numerical trust layer:
 
 - the detective cat watches Alice & Bob cat-qubit simulations;
