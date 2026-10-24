@@ -100,6 +100,14 @@ def analyze_run(
         values = run.observables["n_memory"]
         metrics["memory_photon_peak"] = _max(values)
         metrics["memory_photon_final"] = _last(values)
+        parameters = run.metadata.get("parameters", {})
+        alpha = parameters.get("alpha") if hasattr(parameters, "get") else None
+        if alpha is not None:
+            target = float(alpha) ** 2
+            final = float(values[-1])
+            metrics["target_memory_photons"] = target
+            metrics["steady_memory_error"] = abs(final - target)
+            metrics["steady_memory_error_percent"] = 100.0 * abs(final - target) / target if target else 0.0
         if len(values) > 1 and values[-1] > values[0] * 1.25:
             pet_state = "watching"
         else:
@@ -190,6 +198,7 @@ def analyze_convergence(
             "selected_Nb": selected.config.Nb if selected else None,
             "abs_tolerance": abs_tolerance,
             "relative_tolerance": relative_tolerance,
+            "best_max_abs_error": min((item.max_abs_error for item in comparisons), default=None),
         }
     )
 

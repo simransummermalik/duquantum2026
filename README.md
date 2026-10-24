@@ -35,6 +35,7 @@ The first vertical slice is dependency-free and includes:
 - measured-runtime-aware configuration recommendations;
 - an evidence-backed convergence report;
 - a Watchcat dashboard that maps report states to the six cat animations;
+- a VS Code extension with a bottom-corner status item and tiny animated popup;
 - a synthetic demo report and unit tests.
 
 The demo uses synthetic trajectories only to test the Watchcat contract. It is
@@ -52,6 +53,14 @@ python3 -m qpet.server
 Then open `http://127.0.0.1:8000/`. The generated `watchcat_report.json` is a
 local artifact and is ignored by Git. The demo is synthetic and is not a
 physics result.
+
+## Use Watchcat inside VS Code
+
+Open this repository in VS Code, press `F5`, and choose **Extension Development
+Host**. In the new window, run the sweep and click **Watchcat** in the
+bottom-right status bar. The extension lives in
+[`vscode-extension`](vscode-extension/README.md), reads the same
+`watchcat_report.json`, and refreshes the cat state while you code.
 
 ## Run the real Alice & Bob sweep
 

@@ -11,6 +11,7 @@ from .pipeline import (
     run_dynamiqs_introductory_sweep,
     write_report,
 )
+from .dynamiqs_adapter import CatParameters
 
 
 def _parse_truncations(value: str) -> tuple[tuple[int, int], ...]:
@@ -45,6 +46,16 @@ def main() -> None:
         extra={
             "challenge_track": "Alice & Bob Introductory Track",
             "units": {"time": "microseconds", "rates": "rad_per_microsecond"},
+            "math": {
+                "alpha": CatParameters().alpha,
+                "alpha_squared": CatParameters().alpha**2,
+                "g2": CatParameters().g2,
+                "kappa_b": CatParameters().kappa_b,
+                "kappa_a": CatParameters().kappa_a,
+                "eps_d": CatParameters().eps_d,
+                "kappa_2_effective": CatParameters().kappa_2,
+                "convergence_rule": "max_t |candidate - reference| <= abs_tol + rel_tol * max_t |reference|",
+            },
         },
     )
     destination = write_report(payload, args.out)

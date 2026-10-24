@@ -1,0 +1,41 @@
+{
+  "name": "watchcat-vscode",
+  "displayName": "Watchcat",
+  "description": "A tiny VS Code companion for Alice & Bob cat-qubit simulation diagnostics.",
+  "version": "0.1.0",
+  "publisher": "watchcat",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:watchcat.openPopup"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "watchcat.openPopup",
+        "title": "Watchcat: Open Corner Popup"
+      },
+      {
+        "command": "watchcat.runSweep",
+        "title": "Watchcat: Run Convergence Sweep"
+      }
+    ],
+    "configuration": {
+      "title": "Watchcat",
+      "properties": {
+        "watchcat.reportPath": {
+          "type": "string",
+          "default": "watchcat_report.json",
+          "description": "Workspace-relative path to the Watchcat JSON report."
+        }
+      }
+    }
+  }
+}
