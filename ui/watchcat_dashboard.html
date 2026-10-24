@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Watchcat</title>
+  <style>
+    :root { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #20201f; background: #f4f4f1; }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; background: #f4f4f1; }
+    .watchcat { position: fixed; right: 16px; bottom: 16px; width: 240px; overflow: hidden; border: 1px solid #20201f; border-radius: 10px; background: #fff; box-shadow: 3px 3px 0 #20201f; }
+    .bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid #20201f; font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+    .dot { width: 8px; height: 8px; margin-right: 5px; display: inline-block; border-radius: 50%; background: #f0b429; }
+    .dot.good { background: #4aa564; }
+    .dot.bad { background: #df5d5d; }
+    iframe { display: block; width: 240px; height: 250px; border: 0; background: #fbfbf8; }
+    .info { padding: 8px 10px 10px; border-top: 1px solid #20201f; font-size: 11px; line-height: 1.45; }
+    .state { font-weight: 800; }
+    .detail { display: block; color: #77736d; }
+  </style>
+</head>
+<body>
+  <aside class="watchcat" aria-label="Watchcat simulation status">
+    <div class="bar"><span>WATCHCAT</span><span><span id="dot" class="dot"></span><span id="status">loading</span></span></div>
+    <iframe id="pet" title="Watchcat animation" src="watchcat_watching.html"></iframe>
+    <div class="info"><span id="state" class="state">Watching</span><span id="detail" class="detail">checking the simulation…</span></div>
+  </aside>
+
+  <script>
+    const stateFiles = {
+      idle: "watchcat_idle.html",
+      watching: "watchcat_watching.html",
+      worried: "watchcat_worried.html",
+      happy: "watchcat_happy.html",
+      celebrating: "watchcat_super_excited.html",
+      sleeping: "watchcat_bedtime.html",
+    };
+    const labels = { idle: "Idle", watching: "Watching", worried: "Worried", happy: "Happy", celebrating: "Celebrating", sleeping: "Sleeping" };
+    const fallback = { report: { pet_state: "watching", status: "demo", diagnostics: [], metrics: {} } };
+    const fileFor = (file) => location.protocol === "file:" ? file : `/ui/${file}`;
+    const text = (value) => value === null || value === undefined ? "—" : String(value);
+    document.getElementById("pet").src = fileFor(stateFiles.watching);
+    function render(payload) {
+      const report = payload.report || fallback.report;
+      const state = stateFiles[report.pet_state] ? report.pet_state : "watching";
+      const metrics = report.metrics || {};
+      const status = report.status || "observed";
+      const statusLabel = { needs_review: "check", validated_optimization: "saved", validated: "good", observed: "ok", demo: "demo" }[status] || status;
+      document.getElementById("pet").src = fileFor(stateFiles[state]);
+      document.getElementById("pet").title = `Watchcat ${labels[state]} state`;
+      document.getElementById("state").textContent = labels[state];
+      document.getElementById("status").textContent = statusLabel;
+      document.getElementById("dot").className = `dot ${state === "worried" ? "bad" : state === "happy" || state === "celebrating" ? "good" : ""}`;
+      const warning = (report.diagnostics || [])[0];
+      document.getElementById("detail").textContent = warning ? warning.message : `Na ${text(metrics.Na)} · Nb ${text(metrics.Nb)}`;
+    }
+    fetch("/api/report").then((response) => response.ok ? response.json() : fallback).then(render).catch(() => render(fallback));
+  </script>
+</body>
+</html>
