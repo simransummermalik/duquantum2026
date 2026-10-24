@@ -13,7 +13,7 @@ diagnostics.
 
 The idle look is Watchcat calmly investigating with its magnifying glass. The
 full idle animation is the supplied
-[`pixel_detective_cat_idle_animation.html`](</Users/summermalik/Downloads/pixel_detective_cat_idle_animation.html>): it loops through blinking, eye movement, tail movement, gentle bobbing, and a magnifying-glass movement.
+[`ui/watchcat_idle.html`](ui/watchcat_idle.html): it runs the original canvas animation directly, including blinking, eye movement, tail movement, gentle bobbing, and magnifying-glass movement.
 
 ## Planned expression states
 
@@ -35,6 +35,7 @@ result.
 
 ## Implementation status
 
-- **Idle animation:** designed and implemented in the supplied HTML file and exported as [`assets/watchcat-idle.gif`](assets/watchcat-idle.gif) for Markdown previews.
+- **Idle animation:** the original HTML animation is preserved at [`ui/watchcat_idle.html`](ui/watchcat_idle.html).
+- **Markdown preview:** an animated fallback GIF is available at [`assets/watchcat-idle.gif`](assets/watchcat-idle.gif).
 - **Static README artwork:** available at [`assets/watchcat.svg`](assets/watchcat.svg).
 - **Simulation-driven expressions:** next integration step for the Watchcat UI.
