@@ -15,16 +15,16 @@ The idle look is Watchcat calmly investigating with its magnifying glass. The
 full idle animation is the supplied
 [`ui/watchcat_idle.html`](ui/watchcat_idle.html): it runs the original canvas animation directly, including blinking, eye movement, tail movement, gentle bobbing, and magnifying-glass movement.
 
-## Planned expression states
+## Expression states
 
-| State | What Watchcat looks like | When it appears |
+| State | Animation | When it appears |
 | --- | --- | --- |
-| **Idle** | Calm detective cat with a magnifying glass | No simulation is running |
-| **Watching** | Focused cat actively investigating | A simulation is running |
-| **Worried** | Concerned cat with a warning message | A truncation, trace, or accuracy check looks unreliable |
-| **Happy** | Smiling cat with a green validation badge | The result passes the requested checks |
-| **Celebrating** | Excited cat with sparkles or a reward | A cheaper validated configuration is found |
-| **Sleeping** | Eyes closed and magnifying glass lowered | Watchcat is inactive for a while |
+| **Idle** | [`watchcat_idle.html`](ui/watchcat_idle.html) | No simulation is running |
+| **Watching** | [`watchcat_watching.html`](ui/watchcat_watching.html) | A simulation or convergence check is running |
+| **Worried** | [`watchcat_worried.html`](ui/watchcat_worried.html) | A truncation, trace, or accuracy check looks unreliable |
+| **Happy** | [`watchcat_happy.html`](ui/watchcat_happy.html) | The result passes the requested checks |
+| **Celebrating** | [`watchcat_super_excited.html`](ui/watchcat_super_excited.html) | A cheaper validated configuration is found |
+| **Sleeping** | [`watchcat_bedtime.html`](ui/watchcat_bedtime.html) | Watchcat is inactive for a while |
 
 ## Important design rule
 
@@ -35,7 +35,11 @@ result.
 
 ## Implementation status
 
-- **Idle animation:** the original HTML animation is preserved at [`ui/watchcat_idle.html`](ui/watchcat_idle.html).
+- **Idle animation:** available at [`ui/watchcat_idle.html`](ui/watchcat_idle.html).
+- **Watching animation:** available at [`ui/watchcat_watching.html`](ui/watchcat_watching.html).
+- **Worried animation:** available at [`ui/watchcat_worried.html`](ui/watchcat_worried.html).
+- **Happy animation:** available at [`ui/watchcat_happy.html`](ui/watchcat_happy.html).
+- **Celebrating animation:** available at [`ui/watchcat_super_excited.html`](ui/watchcat_super_excited.html).
+- **Sleeping animation:** available at [`ui/watchcat_bedtime.html`](ui/watchcat_bedtime.html).
 - **Markdown preview:** an animated fallback GIF is available at [`assets/watchcat-idle.gif`](assets/watchcat-idle.gif).
 - **Static README artwork:** available at [`assets/watchcat.svg`](assets/watchcat.svg).
-- **Simulation-driven expressions:** next integration step for the Watchcat UI.
