@@ -1,0 +1,79 @@
+# Task 1.0 (c) Stabilization: two-photon loss + two-photon drive.
+
+import dynamiqs as dq
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+
+dq.set_precision("double")
+
+# Dimension and operators
+Na = 30
+a = dq.destroy(Na)
+n_op = a.dag() @ a
+I = dq.eye(Na)
+
+# Given parameters
+g2 = 2 * jnp.pi * 0.763
+kappa_b = 2 * jnp.pi * 9.3e-3
+
+# Define kappa_a using the value provided in the problem statement
+# Replace this value if kappa_a is different:
+kappa_a = 2 * jnp.pi * 9.3e-3
+
+kappa2 = 4 * g2**2 / kappa_b
+alpha = 2.1
+
+# Three two-photon dissipation strengths
+kappa2_values = jnp.array([
+    kappa2 / 4,
+    kappa2,
+    4 * kappa2,
+])
+
+# Batched jump operators
+L2_base = a @ a - alpha**2 * I
+L2_batch = jnp.sqrt(kappa2_values)[:, None, None] * L2_base
+L1 = jnp.sqrt(kappa_a) * a
+
+# Initial state: vacuum
+psi0 = dq.fock(Na, 0)
+
+# Time: 0 to 4 milliseconds
+# Parameters expressed in MHz correspond to timescales in microseconds
+tsave = jnp.linspace(0.0, 4e-3, 101)
+
+# One call for all three simulations
+res = dq.mesolve(
+    0.0 * n_op,
+    [L2_batch, L1],
+    psi0,
+    tsave,
+    exp_ops=[n_op],
+    progress_meter=False,
+)
+
+# Expectation values: three simulations, one observable
+n_num = jnp.real(res.expects[:, 0, :])
+
+# Plot
+plt.figure(figsize=(9, 5))
+
+labels = [
+    r"$\kappa_2/4$",
+    r"$\kappa_2$ nominal",
+    r"$4\kappa_2$",
+]
+
+for i, label in enumerate(labels):
+    plt.plot(tsave, n_num[i], label=label)
+
+plt.axhline(alpha**2, color="black", linestyle=":",
+            label=r"$|\alpha|^2=4.41$")
+
+plt.xlabel("Time (µs)")
+plt.ylabel(r"$\langle a^\dagger a\rangle$")
+plt.title("Cat-State Stabilization")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
