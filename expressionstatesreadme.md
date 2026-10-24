@@ -5,6 +5,9 @@ simulation. Its expressions make the numerical results easy to notice, while
 the actual scientific decision always comes from Watchcat's measured
 diagnostics.
 
+Open [`ui/watchcat_states.html`](ui/watchcat_states.html) to preview and switch
+between all six animations in one UI.
+
 ## Idle — current look
 
 <p align="center">

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Watchcat Expression States</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #11151b;
+      color: #f4f7fb;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; padding: 28px; background: radial-gradient(circle at top, #253143, #11151b 52%); }
+    main { max-width: 1100px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 5vw, 48px); }
+    .intro { margin: 0 0 24px; color: #b6c0cf; }
+    .states { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+    button { border: 1px solid #3b4757; border-radius: 999px; padding: 10px 16px; background: #1b2430; color: #dfe8f2; font: inherit; cursor: pointer; }
+    button:hover, button.active { border-color: #f4a259; background: #3b2b22; color: #fff7ef; }
+    .panel { overflow: hidden; border: 1px solid #354151; border-radius: 18px; background: #0b0e12; box-shadow: 0 18px 50px #0005; }
+    .panel-header { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; padding: 18px 20px; border-bottom: 1px solid #293442; }
+    .panel-header strong { font-size: 20px; }
+    .panel-header span { color: #9eabbc; font-size: 14px; text-align: right; }
+    iframe { display: block; width: 100%; height: min(72vh, 650px); border: 0; background: #fbfbf8; }
+    .note { margin-top: 14px; color: #9eabbc; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Watchcat Expression States</h1>
+    <p class="intro">Preview the exact animated HTML cat used for each simulation state.</p>
+    <nav class="states" id="states" aria-label="Watchcat states"></nav>
+    <section class="panel">
+      <div class="panel-header">
+        <strong id="state-name">Idle</strong>
+        <span id="state-description">Calm detective cat while no simulation is running.</span>
+      </div>
+      <iframe id="state-preview" title="Watchcat idle animation" src="watchcat_idle.html"></iframe>
+    </section>
+    <p class="note">The scientific diagnostics will drive this state switcher; the animations are only the communication layer.</p>
+  </main>
+  <script>
+    const states = [
+      { key: "idle", label: "Idle", file: "watchcat_idle.html", description: "Calm detective cat while no simulation is running." },
+      { key: "watching", label: "Watching", file: "watchcat_watching.html", description: "Actively scanning a running simulation or convergence check." },
+      { key: "worried", label: "Worried", file: "watchcat_worried.html", description: "A numerical check may be unreliable." },
+      { key: "happy", label: "Happy", file: "watchcat_happy.html", description: "The result passed the requested checks." },
+      { key: "celebrating", label: "Celebrating", file: "watchcat_super_excited.html", description: "A cheaper validated configuration was found." },
+      { key: "sleeping", label: "Sleeping", file: "watchcat_bedtime.html", description: "Watchcat is inactive and settling down." },
+    ];
+    const nav = document.getElementById("states");
+    const preview = document.getElementById("state-preview");
+    const name = document.getElementById("state-name");
+    const description = document.getElementById("state-description");
+    states.forEach((state, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = state.label;
+      button.addEventListener("click", () => selectState(state.key));
+      button.dataset.state = state.key;
+      nav.appendChild(button);
+      if (index === 0) button.classList.add("active");
+    });
+    function selectState(key) {
+      const state = states.find((candidate) => candidate.key === key) || states[0];
+      preview.src = state.file;
+      preview.title = `Watchcat ${state.label.toLowerCase()} animation`;
+      name.textContent = state.label;
+      description.textContent = state.description;
+      document.querySelectorAll("button[data-state]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.state === state.key);
+      });
+    }
+  </script>
+</body>
+</html>
