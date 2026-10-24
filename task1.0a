@@ -1,0 +1,50 @@
+# Task 1.0 (a) Single-photon loss, in physical units.
+
+import dynamiqs as dq
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+
+dq.set_precision("double")
+
+Na = 30
+a = dq.destroy(Na)
+n_op = a.dag() @ a
+
+# Parameters in rad/s
+Delta = 2 * jnp.pi * 1e6
+kappa = 2 * jnp.pi * 1e6
+
+# Hamiltonian and single-photon loss
+H = Delta * n_op
+jump_ops = [jnp.sqrt(kappa) * a]
+
+# Initial coherent state
+alpha0 = 2.0
+psi0 = dq.coherent(Na, alpha0)
+
+# Time in seconds: 0 to 1 microsecond
+tsave = jnp.linspace(0.0, 1e-6, 101)
+
+# Evolution
+res = dq.mesolve(
+    H,
+    jump_ops,
+    psi0,
+    tsave,
+    exp_ops=[n_op],
+    progress_meter=False,
+)
+
+# Comparison with the analytical solution
+n_num = jnp.real(res.expects[0])
+n_exact = abs(alpha0)**2 * jnp.exp(-kappa * tsave)
+
+plt.figure(figsize=(8, 5))
+plt.plot(tsave * 1e6, n_num, "o", ms=3, label="Dynamiqs")
+plt.plot(tsave * 1e6, n_exact, "-", label="Analytical")
+plt.xlabel("Time (µs)")
+plt.ylabel(r"$\langle a^\dagger a\rangle$")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
