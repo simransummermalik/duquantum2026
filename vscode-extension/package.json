@@ -2,7 +2,7 @@
   "name": "watchcat-vscode",
   "displayName": "Watchcat",
   "description": "A tiny VS Code companion for Alice & Bob cat-qubit simulation diagnostics.",
-  "version": "0.1.0",
+  "version": "0.1.6",
   "publisher": "watchcat",
   "license": "MIT",
   "engines": {

@@ -27,7 +27,8 @@ export BACKBOARD_API_KEY="..."
 export BACKBOARD_ASSISTANT_ID="..."
 export WATCHCAT_TIGER_DATABASE_URL="postgresql://..."
 export ELEVENLABS_API_KEY="..."
-export ELEVENLABS_VOICE_ID="JBFqnCBsd6RMkjVDRZzb"
+export ELEVENLABS_VOICE_ID="your-own-or-API-eligible-voice-id"
+export ELEVENLABS_MODEL_ID="eleven_v4" # expressive delivery tags
 ```
 
 For a generic AI explanation backend, use the provider-neutral variables below;

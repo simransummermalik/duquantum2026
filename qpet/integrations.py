@@ -28,6 +28,7 @@ def _load_local_env() -> None:
         lines = env_file.read_text(encoding="utf-8").splitlines()
     except OSError:
         return
+    local_voice_settings = {"ELEVENLABS_VOICE_ID", "ELEVENLABS_MODEL_ID"}
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or "=" not in stripped:
@@ -35,7 +36,9 @@ def _load_local_env() -> None:
         key, value = stripped.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        if key and not os.environ.get(key):
+        # VS Code may inherit stale voice settings from the shell that launched
+        # it. The project's .env is the source of truth for these two choices.
+        if key and (key in local_voice_settings or not os.environ.get(key)):
             os.environ[key] = value
 
 
@@ -265,8 +268,26 @@ def speak_report(payload: dict[str, Any], output: str | Path = "watchcat_alert.m
     api_key = os.getenv("ELEVENLABS_API_KEY")
     if not api_key:
         return {"provider": "local-fallback", "configured": False, "spoken": False, "text": text}
-    voice_id = os.getenv("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb")
-    model_id = os.getenv("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2")
+    voice_id = os.getenv("ELEVENLABS_VOICE_ID", "").strip()
+    if not voice_id:
+        return {
+            "provider": "elevenlabs",
+            "configured": True,
+            "spoken": False,
+            "error": "Set ELEVENLABS_VOICE_ID in .env to a voice your API plan can use.",
+            "text": text,
+        }
+    model_id = os.getenv("ELEVENLABS_MODEL_ID") or "eleven_v4"
+    if model_id in {"eleven_v4", "eleven_v4_turbo", "eleven_v3"}:
+        pet_state = payload.get("report", {}).get("pet_state", "idle")
+        delivery = {
+            "worried": "[concerned, bright cartoon cat voice]",
+            "happy": "[happy, bright cartoon cat voice]",
+            "celebrating": "[excited, bright cartoon cat voice]",
+            "sleeping": "[sleepy, soft cartoon cat voice]",
+            "watching": "[curious, bright cartoon cat voice]",
+        }.get(pet_state, "[playful, bright cartoon cat voice]")
+        text = f"{delivery} Meow! {text}"
     try:
         request = Request(
             f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128",
@@ -276,10 +297,63 @@ def speak_report(payload: dict[str, Any], output: str | Path = "watchcat_alert.m
         )
         with urlopen(request, timeout=20) as response:
             Path(output).write_bytes(response.read())
+        played = False
         if play and sys.platform == "darwin":
-            subprocess.Popen(["afplay", str(output)])
-        return {"provider": "elevenlabs", "configured": True, "spoken": True, "path": str(output), "text": text}
-    except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            try:
+                subprocess.run(
+                    ["afplay", str(output)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                played = True
+            except (subprocess.SubprocessError, OSError) as exc:
+                playback_error = getattr(exc, "stderr", None) or str(exc)
+                return {
+                    "provider": "elevenlabs",
+                    "configured": True,
+                    "spoken": False,
+                    "generated": True,
+                    "played": False,
+                    "path": str(output),
+                    "error": playback_error.strip(),
+                    "text": text,
+                }
+        return {
+            "provider": "elevenlabs",
+            "configured": True,
+            "spoken": True,
+            "generated": True,
+            "played": played,
+            "path": str(output),
+            "text": text,
+        }
+    except HTTPError as exc:
+        try:
+            detail = exc.read().decode("utf-8", errors="replace").strip()
+        except OSError:
+            detail = ""
+        try:
+            error_body = json.loads(detail)
+        except (TypeError, ValueError):
+            error_body = {}
+        api_detail = error_body.get("detail") if isinstance(error_body, dict) else None
+        if isinstance(api_detail, dict):
+            message = api_detail.get("message")
+            code = api_detail.get("code")
+            if message:
+                detail = f"{message} ({code})" if code else str(message)
+        elif isinstance(api_detail, str):
+            detail = api_detail
+        return {
+            "provider": "elevenlabs",
+            "configured": True,
+            "spoken": False,
+            "error": detail or f"HTTP {exc.code}: {exc.reason}",
+            "text": text,
+        }
+    except (URLError, TimeoutError, OSError) as exc:
         return {"provider": "elevenlabs", "configured": True, "spoken": False, "error": str(exc), "text": text}
 
 

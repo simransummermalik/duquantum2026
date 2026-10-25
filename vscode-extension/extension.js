@@ -27,6 +27,7 @@ let sidebarView;
 let pollHandle;
 let currentContext;
 let sweepRunning = false;
+let speechRunning = false;
 let outcomeState;
 let outcomeTimer;
 let popupAnimationState;
@@ -272,19 +273,49 @@ async function runSweep(context) {
   }
 }
 
-function runIntegrationModule(root, args) {
+function runIntegrationModule(root, args, { timeoutMs } = {}) {
   const executable = pythonExecutable(root);
   if (!executable) return Promise.reject(new Error("No Python interpreter found."));
   return new Promise((resolve, reject) => {
     const child = spawn(executable, ["-m", "qpet.integrations", ...args], { cwd: root });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    let timeout;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      callback(value);
+    };
     child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
     child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    child.on("error", reject);
+    child.on("error", (error) => finish(reject, error));
     child.on("close", (code) => {
-      if (code === 0) resolve({ stdout, stderr });
-      else reject(new Error(stderr.trim() || `Integration exited with code ${code}`));
+      if (code === 0) finish(resolve, { stdout, stderr });
+      else finish(reject, new Error(stderr.trim() || `Integration exited with code ${code}`));
+    });
+    if (timeoutMs) {
+      timeout = setTimeout(() => {
+        child.kill();
+        finish(reject, new Error(`ElevenLabs request timed out after ${Math.round(timeoutMs / 1000)} seconds.`));
+      }, timeoutMs);
+    }
+  });
+}
+
+function playAudioFile(filePath) {
+  if (process.platform !== "darwin") {
+    return Promise.reject(new Error("Automatic audio playback is currently supported on macOS."));
+  }
+  return new Promise((resolve, reject) => {
+    const player = spawn("/usr/bin/afplay", [filePath]);
+    let stderr = "";
+    player.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    player.on("error", reject);
+    player.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `Mac audio player exited with code ${code}.`));
     });
   });
 }
@@ -310,24 +341,46 @@ async function explainReport(context) {
 }
 
 async function speakAlert(context) {
+  if (speechRunning) {
+    postPanelMessage({ type: "speechStatus", tone: "working", text: "Watchcat is already playing the current alert." });
+    return;
+  }
   const root = projectRoot();
   const destination = reportPath();
   if (!root || !destination) {
+    postPanelMessage({ type: "speechStatus", tone: "error", text: "Open the Watchcat project and run a sweep before using Speak." });
     vscode.window.showErrorMessage("Watchcat needs an open workspace and report to speak.");
     return;
   }
+  speechRunning = true;
+  postPanelMessage({ type: "speaking", running: true, text: "Generating Watchcat’s playful cat voice with ElevenLabs…" });
   try {
-    const result = await runIntegrationModule(root, ["speak", "--report", destination, "--out", "watchcat_alert.mp3", "--play"]);
+    const result = await runIntegrationModule(
+      root,
+      ["speak", "--report", destination, "--out", "watchcat_alert.mp3"],
+      { timeoutMs: 60000 },
+    );
     const speech = JSON.parse(result.stdout);
-    if (speech.spoken) {
-      vscode.window.showInformationMessage("Watchcat alert played with your configured ElevenLabs voice.");
-    } else if (!speech.configured) {
+    if (!speech.configured) {
+      postPanelMessage({ type: "speechStatus", tone: "error", text: "ElevenLabs key is missing from the project .env file." });
       vscode.window.showWarningMessage("ElevenLabs is not configured. Add ELEVENLABS_API_KEY to the project .env file.");
+    } else if (!speech.spoken) {
+      const message = speech.error || "ElevenLabs did not return an audio file.";
+      postPanelMessage({ type: "speechStatus", tone: "error", text: `ElevenLabs error: ${message}` });
+      vscode.window.showErrorMessage(`ElevenLabs could not create the alert: ${message}`);
     } else {
-      vscode.window.showErrorMessage(`ElevenLabs could not create the alert: ${speech.error || "check the API key, voice ID, and Text to Speech permission"}`);
+      const audioPath = path.isAbsolute(speech.path) ? speech.path : path.resolve(root, speech.path);
+      postPanelMessage({ type: "speechStatus", tone: "working", text: "Audio generated. Playing Watchcat’s cat-style alert now…" });
+      await playAudioFile(audioPath);
+      postPanelMessage({ type: "speechStatus", tone: "done", text: "Watchcat’s cat-style voice finished playing." });
+      vscode.window.showInformationMessage("Watchcat’s cat-style voice alert finished playing.");
     }
   } catch (error) {
+    postPanelMessage({ type: "speechStatus", tone: "error", text: `Speak failed: ${error.message}` });
     vscode.window.showErrorMessage(`Watchcat voice alert failed: ${error.message}`);
+  } finally {
+    speechRunning = false;
+    postPanelMessage({ type: "speaking", running: false });
   }
 }
 
@@ -484,6 +537,10 @@ function popupHtml(webview, uiRoot, initialState, nonce = String(Date.now())) {
     .completion:empty { display: none; }
     .completion.done { color: #277a43; font-weight: 800; }
     .completion.error { color: #b44040; font-weight: 800; }
+    .voice-status { min-height: 0; padding: 0 10px; color: #625e57; font-size: 9px; line-height: 1.4; }
+    .voice-status:not(:empty) { padding-bottom: 7px; }
+    .voice-status.done { color: #277a43; }
+    .voice-status.error { color: #b44040; }
     .how { padding: 9px 10px 10px; border-top: 1px solid #ddd9d0; background: #fffdf5; font-size: 10px; line-height: 1.45; }
     .how[hidden] { display: none; }
     .how-title { margin-bottom: 4px; font-weight: 800; }
@@ -519,6 +576,7 @@ function popupHtml(webview, uiRoot, initialState, nonce = String(Date.now())) {
       <div class="metric"><small>selected</small><strong id="selected">—</strong></div>
     </div>
     <div class="actions"><button id="run" type="button">Run sweep</button><button id="wigner" type="button">Wigner</button><button id="explain" type="button">Explain</button><button id="speak" type="button">Speak</button></div>
+    <div id="voiceStatus" class="voice-status" aria-live="polite"></div>
     <div id="completion" class="completion" aria-live="polite"></div>
     <section id="how" class="how" hidden>
       <div class="how-title">How Watchcat works</div>
@@ -599,7 +657,32 @@ function popupHtml(webview, uiRoot, initialState, nonce = String(Date.now())) {
     document.getElementById("run").addEventListener("click", () => vscode.postMessage({ type: "runSweep" }));
     document.getElementById("wigner").addEventListener("click", () => vscode.postMessage({ type: "openWigner" }));
     document.getElementById("explain").addEventListener("click", () => vscode.postMessage({ type: "explainReport" }));
-    document.getElementById("speak").addEventListener("click", () => vscode.postMessage({ type: "speakAlert" }));
+    const startSpeak = (event) => {
+      const button = event.currentTarget;
+      if (button.disabled || button.dataset.requestPending === "true") return;
+      button.dataset.requestPending = "true";
+      button.disabled = true;
+      button.textContent = "Starting…";
+      const status = document.getElementById("voiceStatus");
+      status.className = "voice-status";
+      status.textContent = "Sending Speak request to the Watchcat extension…";
+      vscode.postMessage({ type: "speakAlert" });
+      window.setTimeout(() => {
+        if (button.textContent === "Starting…") {
+          button.dataset.requestPending = "false";
+          button.disabled = false;
+          button.textContent = "Speak";
+          status.className = "voice-status error";
+          status.textContent = "The extension did not acknowledge the click. Reload the Extension Development Host and try again.";
+        }
+      }, 5000);
+    };
+    const speakButton = document.getElementById("speak");
+    // WebViews can consume the first click when they take focus. Pointer-up
+    // starts the action immediately; the guard keeps the following click from
+    // sending a duplicate request. Keyboard activation still uses click.
+    speakButton.addEventListener("pointerup", startSpeak);
+    speakButton.addEventListener("click", startSpeak);
     document.getElementById("info").addEventListener("click", () => {
       const panel = document.getElementById("how");
       const open = !panel.hidden;
@@ -630,6 +713,31 @@ function popupHtml(webview, uiRoot, initialState, nonce = String(Date.now())) {
         const button = document.getElementById("explain");
         button.disabled = event.data.running;
         button.textContent = event.data.running ? "Thinking…" : "Explain";
+      }
+      if (event.data?.type === "speaking") {
+        const button = document.getElementById("speak");
+        button.disabled = event.data.running;
+        button.textContent = event.data.running ? "Speaking…" : "Speak";
+        if (!event.data.running) button.dataset.requestPending = "false";
+        if (event.data.running) {
+          const status = document.getElementById("voiceStatus");
+          status.className = "voice-status";
+          status.textContent = event.data.text || "Generating and playing the alert…";
+        }
+      }
+      if (event.data?.type === "speechStatus") {
+        const status = document.getElementById("voiceStatus");
+        status.className = "voice-status " + (event.data.tone || "");
+        status.textContent = event.data.text;
+        const button = document.getElementById("speak");
+        if (event.data.tone === "working") {
+          button.disabled = true;
+          button.textContent = "Speaking…";
+        } else {
+          button.dataset.requestPending = "false";
+          button.disabled = false;
+          button.textContent = "Speak";
+        }
       }
     });
     setState(${initialStateJson});
