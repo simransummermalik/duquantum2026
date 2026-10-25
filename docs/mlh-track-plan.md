@@ -30,15 +30,24 @@ export ELEVENLABS_API_KEY="..."
 export ELEVENLABS_VOICE_ID="JBFqnCBsd6RMkjVDRZzb"
 ```
 
-No key is required for the core product. Without sponsor credentials,
-Watchcat still runs the real physics, saves local history, gives a
-deterministic evidence-based explanation, and never pretends an integration
-worked.
+For a generic AI explanation backend, use the provider-neutral variables below;
+the popup only exposes an **Explain** action and never displays the secret:
+
+```bash
+export WATCHCAT_AI_PROVIDER="openai"
+export WATCHCAT_AI_API_KEY="..."
+export WATCHCAT_AI_MODEL="gpt-5-mini"
+```
+
+Document the actual backend accurately in the submission. No key is required
+for the core product. Without credentials, Watchcat still runs the real
+physics, saves local history, gives a deterministic evidence-based explanation,
+and never pretends an integration worked.
 
 ## Commands
 
 ```bash
-# Explain the current report; uses Gemini when GEMINI_API_KEY is set.
+# Explain the current report; uses the configured AI backend or local fallback.
 .venv/bin/python -m qpet.integrations explain
 
 # Save local history and mirror to configured Backboard/Tiger Data services.

@@ -17,6 +17,24 @@
   ],
   "main": "./extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "watchcat",
+          "title": "Watchcat",
+          "icon": "./watchcat.svg"
+        }
+      ]
+    },
+    "views": {
+      "watchcat": [
+        {
+          "id": "watchcat.panel",
+          "name": "Watchcat",
+          "type": "webview"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "watchcat.openPopup",

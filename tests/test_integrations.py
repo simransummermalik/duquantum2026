@@ -47,6 +47,14 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(len(history["runs"]), 1)
             self.assertEqual(history["runs"][0]["reference_Na"], None)
 
+    @patch.dict(os.environ, {"WATCHCAT_AI_PROVIDER": "openai", "WATCHCAT_AI_API_KEY": "test-key"}, clear=False)
+    @patch("qpet.integrations._post_json", return_value={"output_text": "Measured explanation."})
+    def test_provider_neutral_ai_explanation(self, post_json):
+        result = explain_report(sample_payload())
+        self.assertEqual(result["provider"], "ai")
+        self.assertEqual(result["text"], "Measured explanation.")
+        post_json.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

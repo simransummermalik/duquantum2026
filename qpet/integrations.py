@@ -35,8 +35,8 @@ def _load_local_env() -> None:
         key, value = stripped.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        if key:
-            os.environ.setdefault(key, value)
+        if key and not os.environ.get(key):
+            os.environ[key] = value
 
 
 def _report_summary(payload: dict[str, Any]) -> dict[str, Any]:
@@ -83,12 +83,52 @@ def _local_explanation(payload: dict[str, Any]) -> str:
     return f"Watchcat is {state}.{final_line} The supplied observables passed the configured checks."
 
 
+def _explanation_prompt(payload: dict[str, Any]) -> str:
+    return (
+        "You are explaining a numerical quantum-simulation report to a hackathon judge. "
+        "Use only the JSON evidence below. Do not claim convergence if status is not validated. "
+        "Mention the key diagnostic, the target alpha-squared comparison, and the next action "
+        "in at most four concise sentences.\n\n"
+        + json.dumps(_report_summary(payload), indent=2, sort_keys=True)
+    )
+
+
+def _openai_explanation(payload: dict[str, Any], api_key: str) -> dict[str, Any]:
+    """Use the OpenAI Responses API without putting provider details in the UI."""
+
+    model = os.getenv("WATCHCAT_AI_MODEL", os.getenv("OPENAI_MODEL", "gpt-5-mini"))
+    endpoint = os.getenv("WATCHCAT_AI_BASE_URL", "https://api.openai.com/v1/responses")
+    result = _post_json(
+        endpoint,
+        headers={"Authorization": f"Bearer {api_key}"},
+        body={"model": model, "input": _explanation_prompt(payload)},
+    )
+    text = result.get("output_text")
+    if not text:
+        for item in result.get("output", []):
+            for content in item.get("content", []):
+                if content.get("type") in {"output_text", "text"} and content.get("text"):
+                    text = content["text"]
+                    break
+            if text:
+                break
+    return {"provider": "ai", "text": text or _local_explanation(payload), "configured": True}
+
+
 def explain_report(payload: dict[str, Any]) -> dict[str, Any]:
-    """Explain a report with Gemini when configured, otherwise use a safe local explanation."""
+    """Explain a report with a configured AI backend, otherwise use local evidence."""
 
     _load_local_env()
     fallback = _local_explanation(payload)
-    api_key = os.getenv("GEMINI_API_KEY")
+    provider = os.getenv("WATCHCAT_AI_PROVIDER", "").strip().lower()
+    generic_key = os.getenv("WATCHCAT_AI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if provider == "openai" and generic_key:
+        try:
+            return _openai_explanation(payload, generic_key)
+        except Exception as exc:  # optional network path must never break Watchcat
+            return {"provider": "local-fallback", "configured": True, "error": str(exc), "text": fallback}
+
+    api_key = os.getenv("GEMINI_API_KEY") or (generic_key if provider == "gemini" else None)
     if not api_key:
         return {"provider": "local-fallback", "text": fallback, "configured": False}
 
