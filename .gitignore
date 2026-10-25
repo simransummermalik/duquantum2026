@@ -2,8 +2,16 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+.env
 build/
 dist/
 *.egg-info/
+*.vsix
 qpet_demo_report.json
 watchcat_report.json
+watchcat_early_validation.json
+watchcat_history.json
+watchcat_explanation.md
+watchcat_alert.mp3
+watchcat_wigner.png
+watchcat_wigner.json

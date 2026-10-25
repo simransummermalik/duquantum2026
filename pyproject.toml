@@ -11,6 +11,9 @@ dependencies = []
 
 [project.optional-dependencies]
 physics = ["dynamiqs>=0.3.7"]
+gemini = ["google-genai>=1.0"]
+data = ["psycopg[binary]>=3.2"]
+visualization = ["matplotlib>=3.7"]
 
 [tool.setuptools.packages.find]
 include = ["qpet*"]

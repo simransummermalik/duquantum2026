@@ -185,6 +185,7 @@ def run_model_to_run(
     return result_to_run(
         result,
         model,
+        dq=dq,
         label=label or f"Na{model.config.Na}-Nb{model.config.Nb}",
         runtime_seconds=runtime,
     )
@@ -198,6 +199,7 @@ def run_truncation_sweep(
     *,
     params: CatParameters | None = None,
     method: Any = None,
+    wigner_out: str | None = None,
 ) -> tuple[tuple[SimulationRun, ...], SimulationRun]:
     """Run a convergence sweep and return all runs plus the reference run.
 
@@ -209,10 +211,27 @@ def run_truncation_sweep(
     if not requested:
         raise ValueError("At least one truncation pair is required")
     runs: list[SimulationRun] = []
+    results_by_config: dict[tuple[int, int], tuple[Any, DynamiqsModel]] = {}
     for Na, Nb in requested:
         model = build_full_two_mode_model(dq, jnp, Na=Na, Nb=Nb, params=params)
-        runs.append(run_model_to_run(dq, model, tsave, method=method))
+        started = time.perf_counter()
+        result = run_model(dq, model, tsave, method=method)
+        runs.append(
+            result_to_run(
+                result,
+                model,
+                dq=dq,
+                label=f"Na{Na}-Nb{Nb}",
+                runtime_seconds=time.perf_counter() - started,
+            )
+        )
+        results_by_config[(Na, Nb)] = (result, model)
     reference = max(runs, key=lambda run: (run.config.Na * run.config.Nb, run.config.Na, run.config.Nb))
+    if wigner_out is not None:
+        reference_result, reference_model = results_by_config[(reference.config.Na, reference.config.Nb)]
+        from .wigner import write_wigner_snapshots
+
+        write_wigner_snapshots(dq, reference_result, reference_model, wigner_out)
     return tuple(runs), reference
 
 
@@ -220,6 +239,7 @@ def result_to_run(
     result: Any,
     model: DynamiqsModel,
     *,
+    dq: Any | None = None,
     label: str = "dynamiqs-run",
     runtime_seconds: float | None = None,
 ) -> SimulationRun:
@@ -233,11 +253,72 @@ def result_to_run(
         if hasattr(values, "real"):
             values = values.real
         observables[name] = tuple(float(value) for value in values.tolist())
+    metadata = dict(model.metadata)
+    if dq is not None and model.config.source == "alice_bob.full_two_mode":
+        metadata["logical_metrics"] = _logical_metrics(dq, result, model)
     return SimulationRun(
         config=model.config,
         times=times,
         observables=observables,
         runtime_seconds=runtime_seconds,
         label=label,
-        metadata=model.metadata,
+        metadata=metadata,
     )
+
+
+def _logical_metrics(dq: Any, result: Any, model: DynamiqsModel) -> dict[str, Any]:
+    """Reduce saved two-mode states and quantify the logical-state evidence.
+
+    Vacuum has even parity. During inflation, a symmetric cat-compatible state
+    keeps a nonzero parity signal while its real coherent amplitude stays near
+    zero. Purity is included because parity alone cannot distinguish every
+    coherent superposition from every mixed state.
+    """
+
+    states = getattr(result, "states", None)
+    if states is None:
+        return {}
+    count = len(result.tsave)
+    indices = tuple(dict.fromkeys((0, count // 3, (2 * count) // 3, count - 1)))
+    a = dq.destroy(model.config.Na)
+    parity = dq.parity(model.config.Na)
+    alpha = float(model.metadata.get("parameters", {}).get("alpha", 0.0))
+    coherent_plus = dq.coherent(model.config.Na, alpha)
+    coherent_minus = dq.coherent(model.config.Na, -alpha)
+    overlap_pm = math.exp(-2 * alpha**2)
+    even_norm = math.sqrt(2 * (1 + overlap_pm))
+    odd_norm = math.sqrt(2 * (1 - overlap_pm))
+    cat_even = (coherent_plus + coherent_minus) / even_norm
+    cat_odd = (coherent_plus - coherent_minus) / odd_norm
+    cat_even_projector = cat_even @ cat_even.dag()
+    cat_odd_projector = cat_odd @ cat_odd.dag()
+    snapshot_times: list[float] = []
+    purities: list[float] = []
+    parities: list[float] = []
+    amplitudes: list[float] = []
+    even_fidelities: list[float] = []
+    odd_fidelities: list[float] = []
+    for index in indices:
+        rho_memory = dq.ptrace(states[index], keep=0)
+        purity = dq.trace(rho_memory @ rho_memory)
+        parity_value = dq.expect(parity, rho_memory)
+        amplitude = dq.expect(a, rho_memory)
+        even_fidelity = dq.expect(cat_even_projector, rho_memory)
+        odd_fidelity = dq.expect(cat_odd_projector, rho_memory)
+        snapshot_times.append(float(result.tsave[index]))
+        purities.append(float(complex(purity).real))
+        parities.append(float(complex(parity_value).real))
+        amplitudes.append(float(complex(amplitude).real))
+        even_fidelities.append(float(complex(even_fidelity).real))
+        odd_fidelities.append(float(complex(odd_fidelity).real))
+    return {
+        "snapshot_times": snapshot_times,
+        "memory_purity": purities,
+        "memory_parity": parities,
+        "memory_amplitude_real": amplitudes,
+        "memory_cat_even_fidelity": even_fidelities,
+        "memory_cat_odd_fidelity": odd_fidelities,
+        "incoherent_pm_alpha_parity": overlap_pm,
+        "incoherent_pm_alpha_even_fidelity": (1 + overlap_pm) / 2,
+        "interpretation": "Parity and near-zero coherent amplitude are compatible with an even symmetric cat; even/odd cat-state fidelity and purity distinguish logical-state preparation from a generic mixture.",
+    }

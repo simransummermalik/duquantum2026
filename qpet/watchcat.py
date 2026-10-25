@@ -115,6 +115,22 @@ def analyze_run(
     else:
         pet_state = "watching"
 
+    logical = run.metadata.get("logical_metrics", {})
+    if isinstance(logical, dict):
+        for name, values in (
+            ("memory_purity", logical.get("memory_purity")),
+            ("memory_parity", logical.get("memory_parity")),
+            ("memory_amplitude_real", logical.get("memory_amplitude_real")),
+            ("memory_cat_even_fidelity", logical.get("memory_cat_even_fidelity")),
+            ("memory_cat_odd_fidelity", logical.get("memory_cat_odd_fidelity")),
+        ):
+            if isinstance(values, list) and values:
+                metrics[f"{name}_final"] = float(values[-1])
+        if "incoherent_pm_alpha_parity" in logical:
+            metrics["incoherent_pm_alpha_parity"] = logical["incoherent_pm_alpha_parity"]
+        if "incoherent_pm_alpha_even_fidelity" in logical:
+            metrics["incoherent_pm_alpha_even_fidelity"] = logical["incoherent_pm_alpha_even_fidelity"]
+
     if diagnostics:
         pet_state = "worried"
         status = "needs_review" if not any(item.severity == "error" for item in diagnostics) else "invalid"

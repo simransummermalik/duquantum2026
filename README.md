@@ -67,7 +67,7 @@ bottom-right status bar. The extension lives in
 Install the optional physics dependencies once:
 
 ```bash
-python3 -m pip install -e ".[physics]"
+python3 -m pip install -e ".[physics,visualization]"
 ```
 
 Then run:
@@ -90,13 +90,39 @@ example:
 python3 -m qpet.run_sweep --duration 0.2 --samples 5 --truncations 8x3,10x4
 ```
 
+Each real sweep also writes `watchcat_wigner.png` and a JSON summary for three
+reduced-memory snapshots. In the VS Code popup, **Wigner** opens that measured
+artifact. Use `--no-wigner` when you only need the scalar diagnostics.
+
 Watchcat is deliberately conservative: if the reference itself reaches the
 top Fock levels, it reports **worried** and recommends increasing the Hilbert
 space instead of claiming a false compute saving.
 
+For a fast, explicitly scoped preparation-window demonstration, compare the
+same model over `0 <= t <= 0.2` microseconds:
+
+```bash
+python3 -m qpet.run_sweep \
+  --duration 0.2 --samples 9 \
+  --truncations 32x10,48x12,64x16 \
+  --no-wigner --out watchcat_early_validation.json
+```
+
+That measured window validates `48x12` against `64x16`; it is a separate
+early-time result, not a replacement for the default 2 microsecond report.
+
 ## Next research extensions
 
-1. Wigner snapshots and full Task 1.3 logical-state fidelity/purity analysis.
-2. VS Code pet panel consuming the same Watchcat JSON contract.
-3. Optional sponsor integrations: Gemini explanations, Backboard memory,
-   Tiger Data experiment history, remote Vultr sweeps, and ElevenLabs voice.
+1. Full Task 1.3 logical-state fidelity analysis beyond the current purity,
+   parity, amplitude, and Wigner evidence.
+2. Remote Vultr sweeps after the local convergence workflow is stable.
+
+The sponsor-track mapping and setup commands are in
+[`docs/mlh-track-plan.md`](docs/mlh-track-plan.md). Gemini, Backboard, Tiger
+Data, and ElevenLabs are optional adapters around the evidence-backed report;
+they never replace the numerical checks.
+
+Use [`docs/judge-demo.md`](docs/judge-demo.md) for the short presentation flow.
+
+Copy [`.env.example`](.env.example) into your local environment when testing
+the optional integrations. Keep real API keys out of Git.

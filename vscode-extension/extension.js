@@ -38,6 +38,9 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand("watchcat.openPopup", () => openPopup(context)),
     vscode.commands.registerCommand("watchcat.runSweep", () => runSweep(context)),
+    vscode.commands.registerCommand("watchcat.explainReport", () => explainReport(context)),
+    vscode.commands.registerCommand("watchcat.speakAlert", () => speakAlert(context)),
+    vscode.commands.registerCommand("watchcat.openWigner", () => openWigner()),
     { dispose: () => stopPolling() },
   );
 
@@ -102,6 +105,11 @@ function refreshStatus() {
   if (popup) updatePopup(state);
 }
 
+function uiRootFor(context) {
+  const bundled = path.join(context.extensionPath, "ui");
+  return vscode.Uri.file(fs.existsSync(bundled) ? bundled : path.resolve(context.extensionPath, "..", "ui"));
+}
+
 function pythonExecutable(root) {
   const candidates = process.platform === "win32"
     ? [path.join(root, ".venv", "Scripts", "python.exe"), "python"]
@@ -158,8 +166,77 @@ async function runSweep(context) {
   }
 }
 
+function runIntegrationModule(root, args) {
+  const executable = pythonExecutable(root);
+  if (!executable) return Promise.reject(new Error("No Python interpreter found."));
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, ["-m", "qpet.integrations", ...args], { cwd: root });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new Error(stderr.trim() || `Integration exited with code ${code}`));
+    });
+  });
+}
+
+async function explainReport(context) {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const destination = reportPath();
+  if (!root || !destination) {
+    vscode.window.showErrorMessage("Watchcat needs an open workspace and report to explain.");
+    return;
+  }
+  popup?.webview.postMessage({ type: "explanationRunning", running: true });
+  try {
+    const result = await runIntegrationModule(root, ["explain", "--report", destination]);
+    const explanation = JSON.parse(result.stdout);
+    popup?.webview.postMessage({ type: "explanation", ...explanation });
+    if (!popup) vscode.window.showInformationMessage(explanation.text);
+  } catch (error) {
+    vscode.window.showErrorMessage(`Watchcat explanation failed: ${error.message}`);
+  } finally {
+    popup?.webview.postMessage({ type: "explanationRunning", running: false });
+  }
+}
+
+async function speakAlert(context) {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const destination = reportPath();
+  if (!root || !destination) {
+    vscode.window.showErrorMessage("Watchcat needs an open workspace and report to speak.");
+    return;
+  }
+  try {
+    const result = await runIntegrationModule(root, ["speak", "--report", destination, "--out", "watchcat_alert.mp3", "--play"]);
+    const speech = JSON.parse(result.stdout);
+    vscode.window.showInformationMessage(speech.spoken ? "Watchcat alert played." : "ElevenLabs is not configured; Watchcat generated the local alert text.");
+  } catch (error) {
+    vscode.window.showErrorMessage(`Watchcat voice alert failed: ${error.message}`);
+  }
+}
+
+async function openWigner() {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const payload = readReport();
+  const configured = payload?.report?.metrics?.wigner_snapshot_path;
+  if (!root || !configured) {
+    vscode.window.showInformationMessage("Run a sweep first to create Wigner snapshots.");
+    return;
+  }
+  const target = path.isAbsolute(configured) ? configured : path.resolve(root, configured);
+  if (!fs.existsSync(target)) {
+    vscode.window.showInformationMessage(`Wigner artifact not found yet: ${target}`);
+    return;
+  }
+  await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(target));
+}
+
 function openPopup(context) {
-  const uiRoot = vscode.Uri.file(path.resolve(context.extensionPath, "..", "ui"));
+  const uiRoot = uiRootFor(context);
   const options = {
     enableScripts: true,
     retainContextWhenHidden: true,
@@ -176,6 +253,9 @@ function openPopup(context) {
     popup.onDidDispose(() => { popup = undefined; }, null, context.subscriptions);
     popup.webview.onDidReceiveMessage((message) => {
       if (message?.type === "runSweep") runSweep(context);
+      if (message?.type === "openWigner") openWigner();
+      if (message?.type === "explainReport") explainReport(context);
+      if (message?.type === "speakAlert") speakAlert(context);
     }, null, context.subscriptions);
     popup.webview.html = popupHtml(popup.webview, uiRoot, normaliseReport(readReport()));
   } else {
@@ -186,7 +266,8 @@ function openPopup(context) {
 
 function updatePopup(state) {
   if (!popup) return;
-  const uri = vscode.Uri.file(path.resolve(currentContext.extensionPath, "..", "ui", STATE_FILES[state.state]));
+  const uiRoot = uiRootFor(currentContext);
+  const uri = vscode.Uri.file(path.join(uiRoot.fsPath, STATE_FILES[state.state]));
   popup.webview.postMessage({
     type: "state",
     state: state.state,
@@ -202,7 +283,7 @@ function updatePopup(state) {
 
 function popupHtml(webview, uiRoot, initialState) {
   const nonce = String(Date.now());
-  const uri = vscode.Uri.file(path.resolve(currentContext.extensionPath, "..", "ui", STATE_FILES[initialState.state]));
+  const uri = vscode.Uri.file(path.join(uiRoot.fsPath, STATE_FILES[initialState.state]));
   const stateUri = webview.asWebviewUri(uri).toString();
   const csp = [
     `default-src 'none'`,
@@ -234,8 +315,8 @@ function popupHtml(webview, uiRoot, initialState) {
     .metric { padding: 5px 6px; border: 1px solid #ddd9d0; border-radius: 5px; }
     .metric small { display: block; color: #77736d; font-size: 9px; }
     .metric strong { font-size: 12px; }
-    .actions { display: flex; gap: 6px; padding: 0 10px 8px; }
-    button { flex: 1; border: 1px solid #20201f; border-radius: 5px; padding: 6px 8px; background: #20201f; color: #fff; font: inherit; font-size: 10px; cursor: pointer; }
+    .actions { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 10px 8px; }
+    button { flex: 1 1 70px; border: 1px solid #20201f; border-radius: 5px; padding: 6px 4px; background: #20201f; color: #fff; font: inherit; font-size: 9px; cursor: pointer; }
     button:disabled { cursor: wait; opacity: .55; }
     details { border-top: 1px solid #ddd9d0; padding: 7px 10px 9px; font-size: 10px; }
     summary { cursor: pointer; font-weight: 800; }
@@ -243,6 +324,7 @@ function popupHtml(webview, uiRoot, initialState) {
     .comparison { display: flex; justify-content: space-between; gap: 8px; padding-top: 4px; }
     .pass { color: #277a43; }
     .fail { color: #b44040; }
+    #explanation { margin-top: 6px; color: #625e57; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -255,10 +337,17 @@ function popupHtml(webview, uiRoot, initialState) {
       <div class="metric"><small>final nₐ</small><strong id="final">—</strong></div>
       <div class="metric"><small>peak nₐ</small><strong id="peak">—</strong></div>
       <div class="metric"><small>edge population</small><strong id="edge">—</strong></div>
+      <div class="metric"><small>parity final</small><strong id="parity">—</strong></div>
+      <div class="metric"><small>memory purity</small><strong id="purity">—</strong></div>
+      <div class="metric"><small>even-cat F</small><strong id="catFidelity">—</strong></div>
       <div class="metric"><small>reference</small><strong id="reference">—</strong></div>
       <div class="metric"><small>selected</small><strong id="selected">—</strong></div>
     </div>
-    <div class="actions"><button id="run" type="button">Run convergence sweep</button></div>
+    <div class="actions"><button id="run" type="button">Run sweep</button><button id="wigner" type="button">Wigner</button><button id="explain" type="button">Explain</button><button id="speak" type="button">Speak</button></div>
+    <details>
+      <summary>Explain this result</summary>
+      <div id="explanation">Click Explain for a constrained Gemini explanation, or use the local fallback.</div>
+    </details>
     <details>
       <summary>Show convergence math</summary>
       <div id="parameters" class="equation"></div>
@@ -283,13 +372,18 @@ function popupHtml(webview, uiRoot, initialState) {
       document.getElementById("final").textContent = number(metrics.memory_photon_final, 3);
       document.getElementById("peak").textContent = number(metrics.memory_photon_peak, 3);
       document.getElementById("edge").textContent = number(metrics.peak_memory_edge_population, 5);
+      document.getElementById("parity").textContent = number(metrics.memory_parity_final, 3);
+      document.getElementById("purity").textContent = number(metrics.memory_purity_final, 3);
+      document.getElementById("catFidelity").textContent = number(metrics.memory_cat_even_fidelity_final, 3);
       document.getElementById("reference").textContent = pair(metrics.reference_Na, metrics.reference_Nb);
       document.getElementById("selected").textContent = pair(metrics.selected_Na, metrics.selected_Nb);
       const g2Ratio = math.g2 && math.kappa_b ? math.g2 / math.kappa_b : undefined;
       const driveRatio = math.eps_d && math.kappa_b ? math.eps_d / math.kappa_b : undefined;
+      const incoherentParity = metrics.incoherent_pm_alpha_parity;
+      const logical = incoherentParity === undefined ? "" : " · incoherent ±α parity = " + number(incoherentParity, 5);
       document.getElementById("parameters").textContent = g2Ratio === undefined
         ? "Model parameters are not in this report yet."
-        : "g₂/κᵦ = " + number(g2Ratio, 3) + " · εd/κᵦ = " + number(driveRatio, 3) + " · κ₂ = " + number(math.kappa_2_effective, 3);
+        : "g₂/κᵦ = " + number(g2Ratio, 3) + " · εd/κᵦ = " + number(driveRatio, 3) + " · κ₂ = " + number(math.kappa_2_effective, 3) + logical;
       document.getElementById("comparisons").innerHTML = (data.comparisons || []).map((item) => {
         const cls = item.passed ? "pass" : "fail";
         const mark = item.passed ? "✓" : "×";
@@ -297,12 +391,23 @@ function popupHtml(webview, uiRoot, initialState) {
       }).join("") || "<div class=equation>No convergence comparisons yet.</div>";
     };
     document.getElementById("run").addEventListener("click", () => vscode.postMessage({ type: "runSweep" }));
+    document.getElementById("wigner").addEventListener("click", () => vscode.postMessage({ type: "openWigner" }));
+    document.getElementById("explain").addEventListener("click", () => vscode.postMessage({ type: "explainReport" }));
+    document.getElementById("speak").addEventListener("click", () => vscode.postMessage({ type: "speakAlert" }));
     window.addEventListener("message", (event) => {
       if (event.data?.type === "state") setState(event.data);
       if (event.data?.type === "running") {
         const button = document.getElementById("run");
         button.disabled = event.data.running;
-        button.textContent = event.data.running ? "Running…" : "Run convergence sweep";
+        button.textContent = event.data.running ? "Running…" : "Run sweep";
+      }
+      if (event.data?.type === "explanation") {
+        document.getElementById("explanation").textContent = event.data.text;
+      }
+      if (event.data?.type === "explanationRunning") {
+        const button = document.getElementById("explain");
+        button.disabled = event.data.running;
+        button.textContent = event.data.running ? "Thinking…" : "Explain";
       }
     });
     setState(${JSON.stringify({ ...initialState, stateUri })});

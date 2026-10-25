@@ -12,6 +12,7 @@ from .pipeline import (
     write_report,
 )
 from .dynamiqs_adapter import CatParameters
+from .integrations import record_experiment
 
 
 def _parse_truncations(value: str) -> tuple[tuple[int, int], ...]:
@@ -31,12 +32,24 @@ def main() -> None:
     parser.add_argument("--samples", type=int, default=81)
     parser.add_argument("--truncations", type=_parse_truncations, default=DEFAULT_TRUNCATIONS)
     parser.add_argument("--out", type=Path, default=Path("watchcat_report.json"))
+    parser.add_argument(
+        "--wigner-out",
+        type=Path,
+        default=Path("watchcat_wigner.png"),
+        help="Write reduced-memory Wigner snapshots beside the report",
+    )
+    parser.add_argument(
+        "--no-wigner",
+        action="store_true",
+        help="Skip Wigner snapshot generation for a faster diagnostics-only run",
+    )
     args = parser.parse_args()
 
     report, runs = run_dynamiqs_introductory_sweep(
         truncations=args.truncations,
         duration_microseconds=args.duration,
         samples=args.samples,
+        wigner_out=None if args.no_wigner else str(args.wigner_out),
     )
     payload = make_report_payload(
         report,
@@ -58,6 +71,8 @@ def main() -> None:
             },
         },
     )
+    integration_status = record_experiment(payload)
+    payload["integrations"] = integration_status
     destination = write_report(payload, args.out)
     print(report.to_json())
     print(f"Wrote {destination}")

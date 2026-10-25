@@ -25,6 +25,18 @@
       {
         "command": "watchcat.runSweep",
         "title": "Watchcat: Run Convergence Sweep"
+      },
+      {
+        "command": "watchcat.explainReport",
+        "title": "Watchcat: Explain Report"
+      },
+      {
+        "command": "watchcat.openWigner",
+        "title": "Watchcat: Open Wigner Snapshots"
+      },
+      {
+        "command": "watchcat.speakAlert",
+        "title": "Watchcat: Speak Alert"
       }
     ],
     "configuration": {

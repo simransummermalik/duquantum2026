@@ -61,6 +61,7 @@ def run_dynamiqs_introductory_sweep(
     samples: int = 81,
     abs_tolerance: float = 1e-3,
     relative_tolerance: float = 1e-2,
+    wigner_out: str | None = None,
 ) -> tuple[WatchcatReport, tuple[SimulationRun, ...]]:
     """Run the real Alice & Bob full two-mode sweep.
 
@@ -80,6 +81,7 @@ def run_dynamiqs_introductory_sweep(
         jnp,
         tsave,
         truncations,
+        wigner_out=wigner_out,
     )
     report = analyze_convergence(
         runs,
@@ -88,4 +90,15 @@ def run_dynamiqs_introductory_sweep(
         abs_tolerance=abs_tolerance,
         relative_tolerance=relative_tolerance,
     )
+    if wigner_out is not None:
+        from dataclasses import replace
+
+        report = replace(
+            report,
+            metrics={
+                **report.metrics,
+                "wigner_snapshot_path": str(wigner_out),
+                "wigner_summary_path": str(Path(wigner_out).with_suffix(".json")),
+            },
+        )
     return report, runs
